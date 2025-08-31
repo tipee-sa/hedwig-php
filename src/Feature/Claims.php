@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Tipee\Hedwig\Feature;
 
-class Claim implements Feature
+class Claims implements Feature
 {
     public function __construct(
         public string $user,
@@ -13,7 +13,7 @@ class Claim implements Feature
     public function jsonSerialize(): array
     {
         return [
-            'claim' => [
+            'claims' => [
                 'user' => $this->user,
             ],
         ];

@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Tipee\Hedwig;
 
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Tipee\Hedwig\Feature\Messaging;
+use Tipee\Hedwig\Feature\Events;
 
 class Client
 {
@@ -35,7 +35,7 @@ class Client
             'i' => time(),
             'e' => $override['expiration'] ?? $this->tokenExpiration,
             'l' => $override['lifetime'] ?? $this->tokenLifetime,
-            'f' => $features ?? [new Messaging()],
+            'f' => $features ?? [new Events()],
         ]);
 
         $signature = hash_hmac('sha256', $token, $override['secret'] ?? $this->secret, binary: true);
