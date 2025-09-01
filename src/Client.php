@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Tipee\Hedwig;
 
+use InvalidArgumentException;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
-use Tipee\Hedwig\Feature\Events;
 
 class Client
 {
@@ -23,19 +23,23 @@ class Client
      * Generates a token that allows the bearer to subscribe to a channel.
      *
      * @param string $channel
-     * @param Feature[]|null $features
+     * @param array<Feature> $features
      * @param array $override
      * @return string
      */
-    public function makeSubscribeToken(string $channel, ?array $features = null, array $override = []): string
+    public function makeSubscribeToken(string $channel, array $features, array $override = []): string
     {
+        if (empty($features)) {
+            throw new InvalidArgumentException('At least one feature is required');
+        }
+
         $token = json_encode([
             't' => $override['tenant'] ?? $this->tenant,
             'c' => $channel,
             'i' => time(),
             'e' => $override['expiration'] ?? $this->tokenExpiration,
             'l' => $override['lifetime'] ?? $this->tokenLifetime,
-            'f' => $features ?? [new Events()],
+            'f' => $features,
         ]);
 
         $signature = hash_hmac('sha256', $token, $override['secret'] ?? $this->secret, binary: true);
@@ -45,28 +49,33 @@ class Client
             '.' . $this->base64_encode($signature);
     }
 
-    public function publish(string $channel, mixed $payload, array $override = [])
+    /**
+     * @param string|array<string> $channels
+     */
+    public function publish(string|array $channels, mixed $payload = null, array $override = [])
     {
-        $message = json_encode([
-            'tenant' =>  $override['tenant'] ?? $this->tenant,
-            'messages' => [
-                [
-                    'channels' => [$channel],
-                    'payload' => $payload,
+        $this->publishBatch($override)->add($channels, $payload)->send();
+    }
+
+    public function publishBatch(array $override = []): PublishBatch
+    {
+        return new PublishBatch(function ($events) use ($override) {
+            $command = json_encode([
+                'tenant' =>  $override['tenant'] ?? $this->tenant,
+                'events' => $events,
+            ], flags: JSON_THROW_ON_ERROR);
+
+            $signature = hash_hmac('sha256', $command, $override['secret'] ?? $this->secret, binary: true);
+
+            $this->httpClient->request('POST', $override['url'] ?? $this->url . '/publish', [
+                'headers' => [
+                    'Hedwig-App' => $override['app'] ?? $this->app,
+                    'Hedwig-Signature' => $this->base64_encode($signature),
+                    'Content-Type' => 'application/json',
                 ],
-            ],
-        ], flags: JSON_THROW_ON_ERROR);
-
-        $signature = hash_hmac('sha256', $message, $override['secret'] ?? $this->secret, binary: true);
-
-        $this->httpClient->request('POST', $override['url'] ?? $this->url . '/publish', [
-            'headers' => [
-                'Hedwig-App' => $override['app'] ?? $this->app,
-                'Hedwig-Signature' => $this->base64_encode($signature),
-                'Content-Type' => 'application/json',
-            ],
-            'body' => $message,
-        ]);
+                'body' => $command,
+            ]);
+        });
     }
 
     private function base64_encode(string $data): string
