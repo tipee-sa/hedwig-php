@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace Tipee\Hedwig;
 
-use InvalidArgumentException;
+use Tipee\Hedwig\Feature\Feature;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
+use InvalidArgumentException;
 
 class Client
 {
